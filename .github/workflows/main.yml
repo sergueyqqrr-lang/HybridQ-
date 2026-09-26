@@ -1,0 +1,87 @@
+name: Build HybridQ
+
+# Se dispara en cada push/PR a main, y manualmente desde la pestaña Actions.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Cancela builds anteriores en curso del mismo branch/PR al llegar uno nuevo.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------
+      # Dependencias de sistema que JUCE necesita para compilar en Linux
+      # (audio, GUI, fuentes, curl para el módulo web opcional). En macOS
+      # y Windows las herramientas ya vienen en el runner de GitHub.
+      # -----------------------------------------------------------------
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libjack-jackd2-dev \
+            ladspa-sdk \
+            libcurl4-openssl-dev \
+            libfreetype6-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev \
+            libwebkit2gtk-4.1-dev \
+            libglu1-mesa-dev mesa-common-dev \
+            ninja-build
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja
+
+      # -----------------------------------------------------------------
+      # Cachea la descarga de JUCE (FetchContent) entre runs para que el
+      # build no tenga que re-clonar el repo de JUCE cada vez.
+      # -----------------------------------------------------------------
+      - name: Cache JUCE FetchContent
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: ${{ runner.os }}-juce-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure (CMake)
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      # -----------------------------------------------------------------
+      # Sube el VST3 (y el Standalone) resultante como artifact descargable
+      # desde la pestaña Actions de GitHub, para probar sin compilar local.
+      # -----------------------------------------------------------------
+      - name: Locate build output
+        shell: bash
+        run: find build -iname "*.vst3" -o -iname "HybridQ.exe" -o -iname "HybridQ.app" | tee build_outputs.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: HybridQ-${{ matrix.os }}
+          path: |
+            build/HybridQ_artefacts/Release/**
+          if-no-files-found: warn
