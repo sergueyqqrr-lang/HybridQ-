@@ -50,6 +50,10 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja
 
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja
+
       # -----------------------------------------------------------------
       # Cachea la descarga de JUCE (FetchContent) entre runs para que el
       # build no tenga que re-clonar el repo de JUCE cada vez.
@@ -61,21 +65,23 @@ jobs:
           key: ${{ runner.os }}-juce-${{ hashFiles('CMakeLists.txt') }}
 
       # -----------------------------------------------------------------
-      # IMPORTANTE (Windows): se fuerza el generador "Visual Studio 17 2022"
-      # en vez de Ninja. Usar Ninja en windows-latest sin activar antes el
-      # entorno de MSVC (vcvarsall) puede hacer que CMake se cuelgue a un
-      # compilador MinGW/GCC que a veces está también en el PATH del
-      # runner -- el binario resultante queda enlazado contra el runtime
-      # de MinGW (libwinpthread-1.dll, libstdc++-6.dll, etc.), que no
-      # existe en la máquina del usuario final, y el plugin/standalone
-      # falla al cargar de forma silenciosa. El generador de Visual Studio
-      # elimina esta ambigüedad por completo: usa siempre MSVC.
-      - name: Configure (CMake, Windows)
+      # IMPORTANTE (Windows): en vez de depender de que CMake detecte solo
+      # el generador "Visual Studio 17 2022" (frágil: puede fallar según la
+      # imagen exacta del runner) o de dejar que Ninja se cuele hacia un
+      # compilador MinGW/GCC que a veces también está en el PATH del runner
+      # (eso fue lo que causó el error de libwinpthread-1.dll antes), esta
+      # acción activa el entorno real de MSVC (equivalente a correr
+      # vcvarsall.bat) ANTES de invocar CMake. Así cl.exe queda garantizado
+      # primero en el PATH sin importar qué más haya instalado, y usamos
+      # Ninja igual que en macOS/Linux -- un único comando de configure
+      # para las tres plataformas.
+      - name: Setup MSVC environment (Windows)
         if: runner.os == 'Windows'
-        run: cmake -B build -S . -G "Visual Studio 17 2022" -A x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
-      - name: Configure (CMake, macOS/Linux)
-        if: runner.os != 'Windows'
+      - name: Configure (CMake)
         run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
