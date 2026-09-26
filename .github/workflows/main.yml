@@ -50,10 +50,6 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja
 
-      - name: Install Ninja (Windows)
-        if: runner.os == 'Windows'
-        run: choco install ninja
-
       # -----------------------------------------------------------------
       # Cachea la descarga de JUCE (FetchContent) entre runs para que el
       # build no tenga que re-clonar el repo de JUCE cada vez.
@@ -64,7 +60,22 @@ jobs:
           path: build/_deps
           key: ${{ runner.os }}-juce-${{ hashFiles('CMakeLists.txt') }}
 
-      - name: Configure (CMake)
+      # -----------------------------------------------------------------
+      # IMPORTANTE (Windows): se fuerza el generador "Visual Studio 17 2022"
+      # en vez de Ninja. Usar Ninja en windows-latest sin activar antes el
+      # entorno de MSVC (vcvarsall) puede hacer que CMake se cuelgue a un
+      # compilador MinGW/GCC que a veces está también en el PATH del
+      # runner -- el binario resultante queda enlazado contra el runtime
+      # de MinGW (libwinpthread-1.dll, libstdc++-6.dll, etc.), que no
+      # existe en la máquina del usuario final, y el plugin/standalone
+      # falla al cargar de forma silenciosa. El generador de Visual Studio
+      # elimina esta ambigüedad por completo: usa siempre MSVC.
+      - name: Configure (CMake, Windows)
+        if: runner.os == 'Windows'
+        run: cmake -B build -S . -G "Visual Studio 17 2022" -A x64
+
+      - name: Configure (CMake, macOS/Linux)
+        if: runner.os != 'Windows'
         run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
