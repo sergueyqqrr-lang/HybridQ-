@@ -86,16 +86,14 @@ void BandHandleComponent::mouseDrag (const juce::MouseEvent& event)
     const auto newFreq = EQCoordinates::xToFreq (posInParent.x, bounds.getWidth());
     const auto newGainDb = EQCoordinates::yToDb (posInParent.y, bounds.getHeight());
 
-    const auto* freqParam = dynamic_cast<juce::RangedAudioParameter*> (
-        processorRef.apvts.getParameter (bandParamID (bandIndex, BandParamSuffix::freq)));
-    const auto* gainParam = dynamic_cast<juce::RangedAudioParameter*> (
-        processorRef.apvts.getParameter (bandParamID (bandIndex, BandParamSuffix::gain)));
-
-    if (freqParam != nullptr)
-        freqAttachment->setValueAsPartOfGesture (freqParam->convertTo0to1 (newFreq));
-
-    if (gainParam != nullptr)
-        gainAttachment->setValueAsPartOfGesture (gainParam->convertTo0to1 (newGainDb));
+    // IMPORTANTE: juce::ParameterAttachment::setValueAsPartOfGesture espera
+    // el valor REAL (Hz, dB), no normalizado -- la normalización la hace
+    // internamente. Pasarle un valor ya convertido con convertTo0to1() lo
+    // normaliza dos veces, colapsando cualquier frecuencia a un valor
+    // pegado al extremo inferior del rango (este era exactamente el bug
+    // por el que el punto "saltaba al principio" al arrastrar).
+    freqAttachment->setValueAsPartOfGesture (newFreq);
+    gainAttachment->setValueAsPartOfGesture (newGainDb);
 
     updatePosition (parent->getLocalBounds());
 }
@@ -111,11 +109,6 @@ void BandHandleComponent::mouseUp (const juce::MouseEvent&)
 
 void BandHandleComponent::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
 {
-    const auto* qParam = dynamic_cast<juce::RangedAudioParameter*> (
-        processorRef.apvts.getParameter (bandParamID (bandIndex, BandParamSuffix::q)));
-    if (qParam == nullptr)
-        return;
-
     const auto currentQ = processorRef.apvts.getRawParameterValue (
         bandParamID (bandIndex, BandParamSuffix::q))->load();
 
@@ -124,16 +117,15 @@ void BandHandleComponent::mouseWheelMove (const juce::MouseEvent&, const juce::M
     const auto factor = std::pow (1.05f, wheel.deltaY * 10.0f);
     const auto newQ = juce::jlimit (0.1f, 18.0f, currentQ * factor);
 
-    qAttachment->setValueAsCompleteGesture (qParam->convertTo0to1 (newQ));
+    // Valor real (no normalizado) -- ver nota en mouseDrag().
+    qAttachment->setValueAsCompleteGesture (newQ);
 }
 
 void BandHandleComponent::mouseDoubleClick (const juce::MouseEvent&)
 {
     // Reset rápido de gain a 0 dB -- gesto estándar en EQs tipo Pro-Q.
-    const auto* gainParam = dynamic_cast<juce::RangedAudioParameter*> (
-        processorRef.apvts.getParameter (bandParamID (bandIndex, BandParamSuffix::gain)));
-    if (gainParam != nullptr)
-        gainAttachment->setValueAsCompleteGesture (gainParam->convertTo0to1 (0.0f));
+    // Valor real (no normalizado) -- ver nota en mouseDrag().
+    gainAttachment->setValueAsCompleteGesture (0.0f);
 }
 
 //==============================================================================
