@@ -1,0 +1,18 @@
+build/
+build-*/
+cmake-build-*/
+
+# JUCE
+JuceLibraryCode/
+*.jucer.bak
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vs/
+.vscode/
+*.xcodeproj/
+*.user
+CMakeUserPresets.json
