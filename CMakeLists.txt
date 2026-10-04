@@ -53,6 +53,7 @@ target_sources(HybridQ
         Source/BandHandleComponent.cpp
         Source/SpectrumDisplayComponent.cpp
         Source/BandControlPanel.cpp
+        Source/TransientSustainSplitter.cpp
 )
 
 target_link_libraries(HybridQ
